@@ -19,6 +19,7 @@
   "homepage": "https://github.com/mrblueblue/vega-sql-examples#readme",
   "dependencies": {
     "d3": "^4.10.0",
+    "mapd-data-layer": "0.0.1-alpha",
     "thrifty": "0.0.2",
     "vega": "^3.0.0-rc4"
   },
