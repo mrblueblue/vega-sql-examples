@@ -1,6 +1,29 @@
 import Thrifty from "thrifty"
 import {createDataGraph} from "mapd-data-layer/lib"
 
+const style = {
+  base: {
+    encode: {
+      "labels": {
+        "interactive": true,
+        "update": {
+          "fill": {"value": "#a7a7a7"},
+        }
+      },
+      "ticks": {
+        "update": {
+          "stroke": {"value": "#a7a7a7"}
+        }
+      },
+      "domain": {
+        "update": {
+          "stroke": {"value": "#a7a7a7"}
+        }
+      }
+    }
+  }
+}
+
 const connection = new Thrifty({
   protocol: "https",
   host: "metis.mapd.com",
@@ -50,49 +73,14 @@ const focusNode = rootNode.data({
 
 const LINE_VEGA_SPEC = {
   $schema: "https://vega.github.io/schema/vega/v3.0.json",
-  width: 500,
-  height: 200,
-  padding: 15,
+  width: 720,
+  height: 480,
+  padding: 5,
   title: "# Records by Departure Month",
   signals: [
     {
-      name: "brush",
-      value: [50, 150],
-      on: [
-        {
-          events: "@overview:mousedown",
-          update: "[x(), x()]"
-        },
-        {
-          events: "[@overview:mousedown, window:mouseup] > window:mousemove!",
-          update: "[brush[0], clamp(x(), 0, width)]"
-        },
-        {
-          events: { signal: "delta" },
-          update: "clampRange([anchor[0] + delta, anchor[1] + delta], 0, width)"
-        }
-      ]
+      "name": "detailDomain"
     },
-    {
-      name: "anchor",
-      value: null,
-      on: [{ events: "@brush:mousedown", update: "slice(brush)" }]
-    },
-    {
-      name: "xdown",
-      value: 0,
-      on: [{ events: "@brush:mousedown", update: "x()" }]
-    },
-    {
-      name: "delta",
-      value: 0,
-      on: [
-        {
-          events: "[@brush:mousedown, window:mouseup] > window:mousemove!",
-          update: "x() - xdown"
-        }
-      ]
-    }
   ],
 
   data: [
@@ -103,114 +91,199 @@ const LINE_VEGA_SPEC = {
     }
   ],
 
-  scales: [
-    {
-      name: "x",
-      type: "utc",
-      range: "width",
-      domain: { data: "line-data", field: "x" }
-    },
-    {
-      name: "y",
-      type: "linear",
-      range: "height",
-      nice: true,
-      zero: false,
-      domain: { data: "line-data", field: "y" }
-    }
-  ],
-
-  axes: [
-    {
-      orient: "bottom",
-      scale: "x",
-      format: "%m-%Y",
-      title: "date_trunc(month, dep_timestamp)"
-    },
-    { orient: "left", scale: "y", title: "# of Records" }
-  ],
-
   marks: [
     {
-      type: "line",
-      name: "overview",
-      from: { data: "line-data" },
-      encode: {
-        enter: {
-          x: { scale: "x", field: "x" },
-          y: { scale: "y", field: "y" },
-          stroke: { value: "steelblue" },
-          strokeWidth: { value: 2 }
-        },
-        update: {
-          fillOpacity: { value: 1 }
-        },
-        hover: {
-          fillOpacity: { value: 0.5 }
+      "type": "group",
+      "name": "detail",
+      "encode": {
+        "enter": {
+          "height": {"value": 390},
+          "width": {"value": 720}
         }
-      }
+      },
+      "scales": [
+        {
+          "name": "xDetail",
+          "type": "time",
+          "range": "width",
+          "domain": {"data": "line-data", "field": "x"},
+          "domainRaw": {"signal": "detailDomain"}
+        },
+        {
+          "name": "yDetail",
+          "type": "linear",
+          "range": [390, 0],
+          "domain": {"data": "line-data", "field": "y"},
+          "nice": true, "zero": true
+        }
+      ],
+      "axes": [
+        {"orient": "bottom", "scale": "xDetail", ...style.base},
+        {"orient": "left", "scale": "yDetail", grid: true, ...style.base}
+      ],
+      "marks": [
+        {
+          "type": "group",
+          "encode": {
+            "enter": {
+              "height": {"field": {"group": "height"}},
+              "width": {"field": {"group": "width"}},
+              "clip": {"value": true}
+            }
+          },
+          "marks": [
+            {
+              "type": "line",
+              "from": {"data": "line-data"},
+              "encode": {
+                "update": {
+                  "x": {"scale": "xDetail", "field": "x"},
+                  "y": {"scale": "yDetail", "field": "y"},
+                  "stroke": {value: "#00AEEF"}
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "group",
+          "name": "overview",
+          "encode": {
+            "enter": {
+              "x": {"value": 0},
+              "y": {"value": 430},
+              "height": {"value": 70},
+              "width": {"value": 720},
+              "fill": {"value": "transparent"}
+            }
+          },
+          "signals": [
+            {
+              "name": "brush", "value": 0,
+              "on": [
+                {
+                  "events": "@overview:mousedown",
+                  "update": "[x(), x()]"
+                },
+                {
+                  "events": "[@overview:mousedown, window:mouseup] > window:mousemove!",
+                  "update": "[brush[0], clamp(x(), 0, width)]"
+                },
+                {
+                  "events": {"signal": "delta"},
+                  "update": "clampRange([anchor[0] + delta, anchor[1] + delta], 0, width)"
+                }
+              ]
+            },
+            {
+              "name": "anchor", "value": null,
+              "on": [{"events": "@brush:mousedown", "update": "slice(brush)"}]
+            },
+            {
+              "name": "xdown", "value": 0,
+              "on": [{"events": "@brush:mousedown", "update": "x()"}]
+            },
+            {
+              "name": "delta", "value": 0,
+              "on": [
+                {
+                  "events": "[@brush:mousedown, window:mouseup] > window:mousemove!",
+                  "update": "x() - xdown"
+                }
+              ]
+            },
+            {
+              "name": "detailDomain",
+              "push": "outer",
+              "on": [
+                {
+                  "events": {"signal": "brush"},
+                  "update": "span(brush) ? invert('xOverview', brush) : null"
+                }
+              ]
+            }
+          ],
+          "scales": [
+            {
+              "name": "xOverview",
+              "type": "time",
+              "range": "width",
+              "domain": {"data": "line-data", "field": "x"}
+            },
+            {
+              "name": "yOverview",
+              "type": "linear",
+              "range": [70, 0],
+              "domain": {"data": "line-data", "field": "y"},
+              "nice": true, "zero": true
+            }
+          ],
+          "axes": [
+            {"orient": "bottom", "scale": "xOverview", ...style.base}
+          ],
+          "marks": [
+            {
+              "type": "line",
+              "interactive": false,
+              "from": {"data": "line-data"},
+              "encode": {
+                "update": {
+                  "x": {"scale": "xOverview", "field": "x"},
+                  "y": {"scale": "yOverview", "field": "y"},
+                  "stroke": {value: "#00AEEF"}
+                }
+              }
+            },
+            {
+              "type": "rect",
+              "name": "brush",
+              "encode": {
+                "enter": {
+                  "y": {"value": 0},
+                  "height": {"value": 70},
+                  "fill": {"value": "#333"},
+                  "fillOpacity": {"value": 0.2}
+                },
+                "update": {
+                  "x": {"signal": "brush[0]"},
+                  "x2": {"signal": "brush[1]"}
+                }
+              }
+            },
+            {
+              "type": "rect",
+              "interactive": false,
+              "encode": {
+                "enter": {
+                  "y": {"value": 0},
+                  "height": {"value": 70},
+                  "width": {"value": 1},
+                  "fill": {"value": "firebrick"}
+                },
+                "update": {
+                  "x": {"signal": "brush[0]"}
+                }
+              }
+            },
+            {
+              "type": "rect",
+              "interactive": false,
+              "encode": {
+                "enter": {
+                  "y": {"value": 0},
+                  "height": {"value": 70},
+                  "width": {"value": 1},
+                  "fill": {"value": "firebrick"}
+                },
+                "update": {
+                  "x": {"signal": "brush[1]"}
+                }
+              }
+            }
+          ]
+        }
+      ]
     },
-    {
-      type: "rect",
-      name: "brush",
-      encode: {
-        enter: {
-          y: { value: 0 },
-          height: { value: 200 },
-          fill: { value: "steelblue" },
-          fillOpacity: { value: 0.2 }
-        },
-        update: {
-          x: { signal: "brush[0]" },
-          x2: { signal: "brush[1]" }
-        }
-      }
-    },
-    {
-      type: "rect",
-      interactive: false,
-      encode: {
-        enter: {
-          y: { value: 0 },
-          height: { value: 200 },
-          width: { value: 1 },
-          fill: { value: "firebrick" }
-        },
-        update: {
-          x: { signal: "brush[0]" }
-        }
-      }
-    },
-    {
-      type: "rect",
-      interactive: false,
-      encode: {
-        enter: {
-          y: { value: 0 },
-          height: { value: 200 },
-          width: { value: 1 },
-          fill: { value: "firebrick" }
-        },
-        update: {
-          x: { signal: "brush[1]" }
-        }
-      }
-    },
-    {
-      name: "bubble",
-      type: "symbol",
-      from: { data: "line-data" },
-      encode: {
-        update: {
-          x: { scale: "x", field: "x" },
-          y: { scale: "y", field: "y" },
-          size: { value: 20 },
-          shape: { value: "circle" },
-          strokeWidth: { value: 2 },
-          fill: { value: "steelblue" }
-        }
-      }
-    }
   ]
 };
 
@@ -229,4 +302,19 @@ connection
     .logLevel(vega.Warn)
     .renderer("svg")
     .run();
+
+  //   const binRow = d3.select("#focus")
+  //    .append("div")
+  //    .attr("class", "bin-row")
+  //    .style("left", 10 + "px")
+   //
+  //   const binRowItems = binRow
+  //    .selectAll(".bin-row-item")
+  //    .data(["auto", "1y"])
+  //    .enter()
+   //
+  //  binRowItems
+  //     .append("div")
+  //     .attr("class", "bin-row-item")
+  //     .text(d => d)
   })
